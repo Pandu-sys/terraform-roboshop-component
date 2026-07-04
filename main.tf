@@ -57,7 +57,7 @@ resource "aws_ami_from_instance" "main" {
   )
 }
 
-/* resource "aws_launch_template" "main" {
+resource "aws_launch_template" "main" {
   name = "${local.common_name}"
   image_id = aws_ami_from_instance.main.id
   instance_initiated_shutdown_behavior = "terminate"
@@ -98,9 +98,9 @@ resource "aws_ami_from_instance" "main" {
    )
 }
 
-resource "aws_lb_target_group" "catalogue" {
-  name     = "${local.common_name}-catalogue"
-  port     = 8080
+resource "aws_lb_target_group" "main" {
+  name     = "${local.common_name}"
+  port     = var.component == "frontend" ? "80" : "8080"
   protocol = "HTTP"
   vpc_id   = local.vpc_id
   deregistration_delay = 30
@@ -109,21 +109,16 @@ resource "aws_lb_target_group" "catalogue" {
     healthy_threshold = 2
     interval = 10
     matcher = "200-299"
-    path = "/health"
-    port = 8080
+    path = var.component == "frontend" ? "/" : "/health"
+    port = var.component == "frontend" ? "80" : "8080"
     protocol = "HTTP"
     timeout = 5
     unhealthy_threshold = 2
   }
 }
 
-resource "aws_placement_group" "test" {
-  name     = "test"
-  strategy = "cluster"
-}
-
-resource "aws_autoscaling_group" "catalogue" {
-  name                      = "${local.common_name}-catalogue"
+resource "aws_autoscaling_group" "main" {
+  name                      = "${local.common_name}"
   max_size                  = 10
   min_size                  = 1
   health_check_grace_period = 120
@@ -132,12 +127,12 @@ resource "aws_autoscaling_group" "catalogue" {
   force_delete              = false
   
   launch_template {
-    id      = aws_launch_template.catalogue.id
+    id      = aws_launch_template.main.id
     version = "$Latest"
   }
   vpc_zone_identifier       = [local.private_subnet_id]
   
-  target_group_arns = [aws_lb_target_group.catalogue.arn] # autoscaling launches into specific target group
+  target_group_arns = [aws_lb_target_group.main.arn] # autoscaling launches into specific target group
  
  instance_refresh {
     strategy = "Rolling"
@@ -150,7 +145,7 @@ resource "aws_autoscaling_group" "catalogue" {
   dynamic "tag" {
     for_each = merge(
       {
-        Name = "${local.common_name}-catalogue"
+        Name = "${local.common_name}"
       },
       local.common_tags
     )
@@ -167,9 +162,9 @@ resource "aws_autoscaling_group" "catalogue" {
   }
 }
 
-resource "aws_autoscaling_policy" "catalogue" {
-  autoscaling_group_name = aws_autoscaling_group.catalogue.name
-  name = "${local.common_name}-catalogue"
+resource "aws_autoscaling_policy" "main" {
+  autoscaling_group_name = aws_autoscaling_group.main.name
+  name = "${local.common_name}"
   policy_type = "TargetTrackingScaling"
   estimated_instance_warmup = 120
   target_tracking_configuration {
@@ -181,31 +176,31 @@ resource "aws_autoscaling_policy" "catalogue" {
   }
 } 
 
-resource "aws_lb_listener_rule" "catalogue" {
-  listener_arn = local.backend_alb_listener_arn
-  priority     = 10
+resource "aws_lb_listener_rule" "main" {
+  listener_arn = local.alb_listener_arn
+  priority     = var.rule_priority
 
   action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.catalogue.arn
+    target_group_arn = aws_lb_target_group.main.arn
   }
 
   condition {
     host_header {
-      values = ["catalogue.backend-alb-${var.environment}.${var.domain_name}"]
+      values = [loca.host_header]
     }
   }
 }
 
-resource "terraform_data" "catalogue-delete" {
+/* resource "terraform_data" "main-delete" {
   triggers_replace = [
-    aws_instance.catalogue.id
+    aws_instance.main.id
   ]
-  depends_on = [aws_autoscaling_policy.catalogue]
+  depends_on = [aws_autoscaling_policy.main]
 
   # executes when terraform is running
   provisioner "local-exec" {
-    command =  "aws ec2 terminate-instances --instance-ids ${aws_instance.catalogue.id}"
+    command =  "aws ec2 terminate-instances --instance-ids ${aws_instance.main.id}"
   }
 }
  */
