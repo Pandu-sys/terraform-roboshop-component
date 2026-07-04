@@ -19,5 +19,5 @@ variable "component" {
 }
 
 variable "rule_priority" {
-    type = string
+    # type = string
 }
