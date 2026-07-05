@@ -192,7 +192,7 @@ resource "aws_lb_listener_rule" "main" {
   }
 }
 
-/* resource "terraform_data" "main-delete" {
+resource "terraform_data" "main-delete" {
   triggers_replace = [
     aws_instance.main.id
   ]
@@ -203,4 +203,3 @@ resource "aws_lb_listener_rule" "main" {
     command =  "aws ec2 terminate-instances --instance-ids ${aws_instance.main.id}"
   }
 }
- */
